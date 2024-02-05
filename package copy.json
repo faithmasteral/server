@@ -1,0 +1,35 @@
+{
+  "name": "face-recognition-nodejs",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "dev": "nodemon app.js",
+    "server": "node app.js"
+  },
+  "engines": {
+    "node": "16.17.0"
+  },
+  "author": "Zulkarnine",
+  "license": "ISC",
+  "dependencies": {
+    "@tensorflow/tfjs-node": "^4.2.0",
+    "axios": "^1.4.0",
+    "bcrypt": "^5.1.0",
+    "canvas": "^2.8.0",
+    "cors": "^2.8.5",
+    "date-differencer": "^0.3.0",
+    "dotenv": "^16.0.3",
+    "express": "^4.17.1",
+    "express-fileupload": "^1.2.1",
+    "face-api.js": "^0.22.2",
+    "install": "^0.13.0",
+    "moment": "^2.29.4",
+    "moment-timezone": "^0.5.43",
+    "mongoose": "^5.12.13",
+    "nodemon": "^2.0.20",
+    "npm": "^9.5.0",
+    "time-difference-js": "^1.0.1",
+    "twilio": "^4.10.0"
+  }
+}
