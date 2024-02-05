@@ -42,7 +42,7 @@ const io = require('socket.io')(server, {
 io.on("connection", socket => {
   console.log("New client connected " + socket.id);
 
-  //call it from kiosk
+  //call it from rpi
   socket.on("sms_sent", data => {
     const { } = data
     console.log("sms-sent")
@@ -481,6 +481,9 @@ app.post("/remove", async (req, res) => {
   }
 })
 
+app.get("/", (_, res) => {
+  res.status(200).json({ msg: "API is Running" }) 
+})
 mongoose
   .connect(
     `mongodb+srv://sjit:pass@cluster0.suax5r5.mongodb.net/sjit`,
