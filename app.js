@@ -393,8 +393,8 @@ app.post("/get-attendance-report", async (req, res) => {
       }
       
     }
-    const enrolledStudents = await db.enrolled.countDocuments({ class_scheduleId: val.csID })
-
+    let enrolledStudents = await db.enrolled.find({ class_scheduleId: val.csID }).select('_id').lean()
+    enrolledStudents = enrolledStudents.length
     const present = l.filter(({ remarks }) => remarks === "PRESENT").length
     const late = l.filter(({ remarks }) => remarks.toLowerCase().includes("late")).length
     const absent = enrolledStudents - (present+late)
