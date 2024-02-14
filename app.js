@@ -391,10 +391,15 @@ app.post("/get-attendance-report", async (req, res) => {
           }
         }
       }
+      
     }
-    const present = l.filter(({ remarks }) => remarks === "PRESENT")
-    const late = l.filter(({ remarks }) => remarks.toLowerCase().includes("late"))
-    res.json({ result: l, present: present, late: late })
+    const enrolledStudents = await db.enrolled.countDocuments({ class_schedule: val.csID })
+
+    const present = l.filter(({ remarks }) => remarks === "PRESENT").length
+    const late = l.filter(({ remarks }) => remarks.toLowerCase().includes("late")).length
+    const absent = enrolledStudents - (present+late)
+    
+    res.json({ result: l, present: present, late: late, absent: absent, enrolledStudents: enrolledStudents })
   } catch (err) {
     console.log(err.message)
     res.status(500)
