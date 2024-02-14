@@ -371,6 +371,7 @@ app.post("/get-attendance-report", async (req, res) => {
           s = {
             subject: v.class_schedule.subject,
             teacher: v.teacher.name,
+            date: moment(v.time).format("MM-DD-YYYY"),
             schedule_date: v.class_schedule.days.join(" "),
             schedule_time: `${moment(v.class_schedule.time[0]).format("hh:mm A")} - ${moment(v.class_schedule.time[1]).format("hh:mm A")}`,
           }
@@ -386,22 +387,24 @@ app.post("/get-attendance-report", async (req, res) => {
       }
 
     }
-    let enrolledStudents = await db.enrolled.find({ class_scheduleId: val.csID }).select('').populate('student').lean()
-    
+    let enrolledStudents = await db.enrolled.find({ class_scheduleId: val.csID }).select('').populate('class_schedule student').lean()
+
     let data = [...l]
     if (enrolledStudents.length > 0) {
-      for (let i = 0; i < enrolledStudents.length; i++) {
-        const stud = enrolledStudents[i]
-        for (let j = 0; j < l.length; j++) {
-          const attendStud = l[j]
+
+      for (let j = 0; j < l.length; j++) {
+        const attendStud = l[j]
+        for (let i = 0; i < enrolledStudents.length; i++) {
+          const stud = enrolledStudents[i]
           if (stud.studentId !== attendStud.student_id) {
             data.push({
               student_id: stud.student.std_id,
               student: stud.student.name,
               date: '-----------',
+              timeIn: '-----------',
               remarks: 'ABSENT'
             })
-          } 
+          }
         }
       }
     }
@@ -409,7 +412,7 @@ app.post("/get-attendance-report", async (req, res) => {
     const present = data.filter(({ remarks }) => remarks === "PRESENT")
     const late = data.filter(({ remarks }) => remarks.toLowerCase().includes("late"))
     const absent = data.filter(({ remarks }) => remarks === "ABSENT")
-    
+
     const calcPerc = (part) => {
       const perc = ((part / enrolledStudents.length) * 100).toFixed(0)
       return `${isNaN(perc) ? '' : perc + '%'}`
@@ -424,7 +427,7 @@ app.post("/get-attendance-report", async (req, res) => {
       absent: absent.length,
       absentPercentage: calcPerc(absent.length),
     })
-    
+
     res.json({ result: data, summary: summary, enrolledStudents: enrolledStudents })
   } catch (err) {
     console.log(err.message)
