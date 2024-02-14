@@ -8,7 +8,7 @@ const fileUpload = require("express-fileupload");
 const moment = require("moment-timezone");
 moment.tz.setDefault("Asia/Manila");
 const axios = require("axios")
- 
+
 const { getTimeDiff } = require("time-difference-js");
 
 const ObjectId = require('mongoose').Types.ObjectId;
@@ -116,11 +116,11 @@ async function getDescriptorsFromDB(student_id, image) {
   return results;
 }
 
-async function SendSMS(to, msg){
+async function SendSMS(to, msg) {
   try {
-    const data = { 
+    const data = {
       to: to, msg: msg
-     }
+    }
     io.sockets.emit("send_sms", data)
     return true
   } catch (error) {
@@ -214,25 +214,22 @@ app.post("/update-student", async (req, res) => {
   }
 })
 
-function reExtract(str, lmt)
-{
-	if (str.length >= lmt)
-	{
-		return `${str.substr(0, lmt)}...`;
-	}
-	else {
+function reExtract(str, lmt) {
+  if (str.length >= lmt) {
+    return `${str.substr(0, lmt)}...`;
+  }
+  else {
     return str;
   }
 }
 
-function checkNumber(str){
+function checkNumber(str) {
   let rxMatchNonDigits = /[^\d]+/g;
-	// Remove all non-digits
-	str = str.replace(rxMatchNonDigits,"");
-	if (str.length >= 10)
-	{
-		return str
-	} else {
+  // Remove all non-digits
+  str = str.replace(rxMatchNonDigits, "");
+  if (str.length >= 10) {
+    return str
+  } else {
     return null;
   }
 }
@@ -287,8 +284,8 @@ app.post("/attendance-check", async (req, res) => {
 
             const cp_number = checkNumber(student.parent_contact)
             const sms_content = `SJIT ALERT ${reExtract(student.name, 20)} participated class of ${reExtract(subject, 15)} dated ${time}!`
-           
-            const notified =  cp_number!== null ?  SendSMS(cp_number, sms_content) : false
+
+            const notified = cp_number !== null ? SendSMS(cp_number, sms_content) : false
             const data = new db.attendance({
               what: what,
               time: time,
@@ -299,7 +296,7 @@ app.post("/attendance-check", async (req, res) => {
             })
             await data.save()
 
-            
+
 
             //send sms notif
             res.json({ notified: notified, msg: msg, name: student.name, time: time, remark: remarks, confidence: conf !== 0 && conf < 100 ? `${(conf).toFixed(2)}%` : "99.9%" });
@@ -366,40 +363,69 @@ app.post("/get-attendance-report", async (req, res) => {
     console.log(result[0])
     console.log(val.csID)
     var l = []
+    var s = {}
     if (result.length > 0) {
       for (let i = 0; i < result.length; i++) {
         const v = result[i]
         if (v.class_schedule._id.toString() === val.csID) {
-          if (i === 1) {
-            l.push({
-              subject: v.class_schedule.subject,
-              teacher: v.teacher.name,
-              schedule_date: v.class_schedule.days.join(" "),
-              schedule_time: `${moment(v.class_schedule.time[0]).format("hh:mm A")} - ${moment(v.class_schedule.time[1]).format("hh:mm A")}`,
-              student_id: v.student.std_id,
-              student: v.student.name,
-              date: moment(v.time).format("MM-DD-YYYY"), timeIn: moment(v.time).format("hh:mm:ss A"),
-              remarks: v.remarks
-            })
-          } else {
-            l.push({
-              student_id: v.student.std_id,
-              student: v.student.name,
-              date: moment(v.time).format("MM-DD-YYYY"), timeIn: moment(v.time).format("hh:mm:ss A"),
-              remarks: v.remarks
-            })
+          s = {
+            subject: v.class_schedule.subject,
+            teacher: v.teacher.name,
+            schedule_date: v.class_schedule.days.join(" "),
+            schedule_time: `${moment(v.class_schedule.time[0]).format("hh:mm A")} - ${moment(v.class_schedule.time[1]).format("hh:mm A")}`,
           }
+
+          l.push({
+            student_id: v.student.std_id,
+            student: v.student.name,
+            date: moment(v.time).format("MM-DD-YYYY"), timeIn: moment(v.time).format("hh:mm:ss A"),
+            remarks: v.remarks
+          })
+
         }
       }
-      
-    }
-    let enrolledStudents = await db.enrolled.find({ class_scheduleId: val.csID }).select('_id').lean()
-    enrolledStudents = enrolledStudents.length
-    const present = l.filter(({ remarks }) => remarks === "PRESENT").length
-    const late = l.filter(({ remarks }) => remarks.toLowerCase().includes("late")).length
-    const absent = enrolledStudents - (present+late)
 
-    res.json({ result: l, present: present, late: late, absent: absent, enrolledStudents: enrolledStudents })
+    }
+    let enrolledStudents = await db.enrolled.find({ class_scheduleId: val.csID }).select('').populate('student').lean()
+    
+    let data = [...l]
+    if (enrolledStudents.length > 0) {
+      for (let i = 0; i < enrolledStudents.length; i++) {
+        const stud = enrolledStudents[i]
+        for (let j = 0; j < l.length; j++) {
+          const attendStud = l[j]
+          if (stud.studentId !== attendStud.student_id) {
+            data.push({
+              student_id: stud.student.std_id,
+              student: stud.student.name,
+              date: '-----------',
+              remarks: 'ABSENT'
+            })
+          } 
+        }
+      }
+    }
+
+    const present = data.filter(({ remarks }) => remarks === "PRESENT")
+    const late = data.filter(({ remarks }) => remarks.toLowerCase().includes("late"))
+    const absent = data.filter(({ remarks }) => remarks === "ABSENT")
+    
+    const calcPerc = (part) => {
+      const perc = ((part / enrolledStudents.length) * 100).toFixed(0)
+      return `${isNaN(perc) ? '' : perc + '%'}`
+    }
+
+    const summary = Object.assign(s, {
+      totalStudents: enrolledStudents.length,
+      present: present.length,
+      presentPercentage: calcPerc(present.length),
+      late: late.length,
+      latePercentage: calcPerc(late.length),
+      absent: absent.length,
+      absentPercentage: calcPerc(absent.length),
+    })
+    
+    res.json({ result: data, summary: summary, enrolledStudents: enrolledStudents })
   } catch (err) {
     console.log(err.message)
     res.status(500)
@@ -487,7 +513,7 @@ app.post("/remove", async (req, res) => {
 })
 
 app.get("/", (_, res) => {
-  res.status(200).json({ msg: "API is Running" }) 
+  res.status(200).json({ msg: "API is Running" })
 })
 mongoose
   .connect(
