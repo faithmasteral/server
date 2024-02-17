@@ -410,7 +410,7 @@ app.post("/get-attendance-report", async (req, res) => {
                     })
               }
           }
-      }
+      } 
       const present = data.filter(({ remarks }) => remarks === "PRESENT")
       const late = data.filter(({ remarks }) => remarks.toLowerCase().includes("late"))
       const absent = data.filter(({ remarks }) => remarks === "ABSENT")
