@@ -398,7 +398,6 @@ app.post("/get-attendance-report", async (req, res) => {
           for(let i=0; i<enrolledStudents.length; i++){
               const eS = enrolledStudents[i]
               const eSID = eS.student._id.toString()
-              console.log('check')
               console.log(l.some(obj => obj._id.toString() === eSID))
               if(!l.some(obj => obj._id.toString() === eSID)){
                   data.push({
