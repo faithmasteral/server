@@ -338,100 +338,103 @@ app.post("/get-enrolled-students", async (req, res) => {
 
 app.post("/get-attendance-report", async (req, res) => {
   try {
-    const val = req.body
-    const query = val.query
-    const join = val.join
-    const select = val.select
-    var date = moment(val.date)
-    date = date.add(1, "days")
-    date = moment(date).format("MM-DD-YYYY")
-    const dateF = moment(val.date).format("MM-DD-YYYY")
-    console.log({ class_schedule: new ObjectId(query.class_schedule) })
-    const qS = [
-      {
-        $match: {
-          $and: [
-            { "createdAt": { $gte: new Date(dateF) } },
-            { "createdAt": { $lte: new Date(date) } },
-          ],
+      const val = req.body
+      const query = val.query
+      const join = val.join
+      const select = val.select
+      var date = moment(val.date)
+      date = date.add(1, "days")
+      date = moment(date).format("MM-DD-YYYY")
+      const dateF = moment(val.date).format("MM-DD-YYYY")
+      const qS = [
+          {
+              $match: {
+                  $and: [
+                      { "createdAt": { $gte: new Date(dateF) } },
+                      { "createdAt": { $lte: new Date(date) } },
+                  ],
+                  class_scheduleId: val.csID
+              },
+          }
+      ]
+      const rslt = await db.attendance.aggregate(qS)
+      let result = await db.attendance.populate(rslt, { path: join !== undefined ? join : "", select: select })
+      var l = []
+      var s = {}
+      if (result.length > 0) {
+          console.log('before', result.length)
+          result = await removeDuplicates(result, ['class_scheduleId', 'teacherId', 'studentId', 'time'])
+          console.log('after', result.length)
+          for (let i = 0; i < result.length; i++) {
+              const v = result[i]
+              s = {
+                  subject: v.class_schedule.subject,
+                  teacher: v.teacher.name,
+                  date: moment(v.time).format("MM-DD-YYYY"),
+                  schedule_date: v.class_schedule.days.join(" "),
+                  schedule_time: `${moment(v.class_schedule.time[0]).format("hh:mm A")} - ${moment(v.class_schedule.time[1]).format("hh:mm A")}`,
+              }
 
-        },
-      }
-    ]
-    const rslt = await db.attendance.aggregate(qS)
-    const result = await db.attendance.populate(rslt, { path: join !== undefined ? join : "", select: select })
-    console.log(result[0])
-    console.log(val.csID)
-    var l = []
-    var s = {}
-    if (result.length > 0) {
-      for (let i = 0; i < result.length; i++) {
-        const v = result[i]
-        if (v.class_schedule._id.toString() === val.csID) {
-          s = {
-            subject: v.class_schedule.subject,
-            teacher: v.teacher.name,
-            date: moment(v.time).format("MM-DD-YYYY"),
-            schedule_date: v.class_schedule.days.join(" "),
-            schedule_time: `${moment(v.class_schedule.time[0]).format("hh:mm A")} - ${moment(v.class_schedule.time[1]).format("hh:mm A")}`,
+              l.push({
+                  _id: v.student._id.toString(),
+                  student_id: v.student.std_id,
+                  student: v.student.name,
+                  date: moment(v.time).format("MM-DD-YYYY"), timeIn: moment(v.time).format("hh:mm:ss A"),
+                  remarks: v.remarks
+              })
+
+
           }
 
-          l.push({
-            student_id: v.student.std_id,
-            student: v.student.name,
-            date: moment(v.time).format("MM-DD-YYYY"), timeIn: moment(v.time).format("hh:mm:ss A"),
-            remarks: v.remarks
-          })
-
-        }
       }
-
-    }
-    let enrolledStudents = await db.enrolled.find({ class_scheduleId: val.csID }).select('').populate('class_schedule student').lean()
-
-    let data = [...l]
-    if (enrolledStudents.length > 0) {
-
-      for (let j = 0; j < l.length; j++) {
-        const attendStud = l[j]
-        for (let i = 0; i < enrolledStudents.length; i++) {
-          const stud = enrolledStudents[i]
-          if (stud.studentId !== attendStud.student_id) {
-            data.push({
-              student_id: stud.student.std_id,
-              student: stud.student.name,
-              date: '-----------',
-              timeIn: '-----------',
-              remarks: 'ABSENT'
-            })
+      let enrolledStudents = await db.enrolled.find({ class_scheduleId: val.csID }).select('').populate('student').lean()
+      console.log(enrolledStudents.length)
+      
+      let data = [...l]
+      if (enrolledStudents.length > 0) {
+          console.log('before', enrolledStudents.length)
+          enrolledStudents = await removeDuplicates(enrolledStudents, ['class_scheduleId', 'studentId', 'teacherId'])
+          console.log('after', enrolledStudents.length)
+          for(let i=0; i<enrolledStudents.length; i++){
+              const eS = enrolledStudents[i]
+              const eSID = eS.student._id.toString()
+              console.log('check')
+              console.log(l.some(obj => obj._id.toString() === eSID))
+              if(!l.some(obj => obj._id.toString() === eSID)){
+                  data.push({
+                      _id: eS.student._id.toString(),
+                      student_id: eS.student.std_id,
+                      student: eS.student.name,
+                      date: '-----------',
+                      timeIn: '-----------',
+                      remarks: 'ABSENT'
+                    })
+              }
           }
-        }
       }
-    }
+      const present = data.filter(({ remarks }) => remarks === "PRESENT")
+      const late = data.filter(({ remarks }) => remarks.toLowerCase().includes("late"))
+      const absent = data.filter(({ remarks }) => remarks === "ABSENT")
 
-    const present = data.filter(({ remarks }) => remarks === "PRESENT")
-    const late = data.filter(({ remarks }) => remarks.toLowerCase().includes("late"))
-    const absent = data.filter(({ remarks }) => remarks === "ABSENT")
+      const calcPerc = (part) => {
+          const perc = ((part / enrolledStudents.length) * 100).toFixed(0)
+          return `${isNaN(perc) ? '' : perc + '%'}` 
+      }
 
-    const calcPerc = (part) => {
-      const perc = ((part / enrolledStudents.length) * 100).toFixed(0)
-      return `${isNaN(perc) ? '' : perc + '%'}`
-    }
-
-    const summary = Object.assign(s, {
-      totalStudents: enrolledStudents.length,
-      present: present.length,
-      presentPercentage: calcPerc(present.length),
-      late: late.length,
-      latePercentage: calcPerc(late.length),
-      absent: absent.length,
-      absentPercentage: calcPerc(absent.length),
-    })
-
-    res.json({ result: data, summary: summary, enrolledStudents: enrolledStudents })
+      const summary = Object.assign(s, {
+          totalStudents: enrolledStudents.length,
+          present: present.length,
+          presentPercentage: calcPerc(present.length),
+          late: late.length,
+          latePercentage: calcPerc(late.length),
+          absent: absent.length,
+          absentPercentage: calcPerc(absent.length),
+      })
+      console.log(data.length)
+      res.json({ summary: summary, result: data })
   } catch (err) {
-    console.log(err.message)
-    res.status(500)
+      console.log(err.message)
+      res.status(500)
   }
 })
 
